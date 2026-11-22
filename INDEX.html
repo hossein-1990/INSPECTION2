@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>داشبورد هوشمند مدیریت و ثبت کالیبراسیون دستگاه‌ها</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Vazirmatn Font for Persian Typography -->
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    
+    <!-- Chart.js for Power BI Style Visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Vazirmatn', 'sans-serif'],
+                    },
+                    colors: {
+                        pbi: {
+                            bg: '#f2f2f2',
+                            card: '#ffffff',
+                            teal: '#01B8AA',
+                            dark: '#374649',
+                            coral: '#FD625E',
+                            yellow: '#F2C80F',
+                            slate: '#5F6B6D',
+                            purple: '#8AD4EB'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #f0f2f5;
+            font-family: 'Vazirmatn', sans-serif;
+            color: #1f2937;
+        }
+        /* Power BI Card Styling */
+        .pbi-card {
+            background: #ffffff;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            border: 1px solid #e5e7eb;
+            transition: box-shadow 0.2s ease;
+        }
+        .pbi-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .pbi-header {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #252423;
+            letter-spacing: -0.01em;
+        }
+        .pbi-sub {
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: #605E5C;
+            text-transform: uppercase;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Navigation / Power BI Report Header -->
+    <header class="bg-[#252423] text-white px-4 py-3 shadow-md sticky top-0 z-30">
+        <div class="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-[#01B8AA] p-2 rounded text-white flex items-center justify-center">
+                    <i data-lucide="activity" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="text-base md:text-lg font-bold leading-tight">سیستم جامع پایش و ثبت کالیبراسیون تجهیزات</h1>
+                    <p class="text-xs text-gray-300">گزارش تحلیلی وضعیت تجهیزات آزمایشگاهی، صنعتی و شرکت‌های کالیبراتور</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Filter by Status -->
+                <select id="statusFilter" onchange="applyFilters()" class="bg-[#3b3a39] text-white text-xs sm:text-sm rounded px-3 py-2 border border-gray-600 focus:outline-none focus:border-[#01B8AA]">
+                    <option value="all">همه وضعیت‌ها</option>
+                    <option value="valid">معتبر (کالیبره شده)</option>
+                    <option value="expiring">نزدیک به انقضا (کمتر از ۳۰ روز)</option>
+                    <option value="expired">منقضی شده (نیاز به اقدام)</option>
+                </select>
+
+                <!-- Add New Calibration Button -->
+                <button onclick="openModal()" class="bg-[#01B8AA] hover:bg-[#019e92] text-white font-semibold text-xs sm:text-sm px-4 py-2 rounded flex items-center gap-2 transition shadow cursor-pointer">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    <span>ثبت کالیبراسیون جدید</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Grid (Inspired by Power BI Layout) -->
+    <main class="flex-1 max-w-[1600px] w-full mx-auto p-3 md:p-5 space-y-4">
+
+        <!-- ROW 1: Top Section (Left KPI + Gauge | Center Stacked Bar | Right Pie Chart) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <!-- Left Column (3 cols): Total Devices KPI & Gauge Chart -->
+            <div class="lg:col-span-3 flex flex-col gap-4">
+                <!-- Card 1: Total Registered Devices -->
+                <div class="pbi-card p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="pbi-header">کل دستگاه‌های ثبت شده</div>
+                        <div class="pbi-sub mt-0.5">تجهیزات تحت پوشش کنترل کیفیت</div>
+                    </div>
+                    <div class="my-4 text-center">
+                        <span id="kpiTotalDevices" class="text-4xl md:text-5xl font-extrabold text-[#252423] tracking-tight">0</span>
+                        <span class="text-sm text-gray-500 font-medium mr-1">دستگاه</span>
+                    </div>
+                    <div class="text-xs text-gray-500 flex justify-between border-t pt-2">
+                        <span>به‌روزرسانی: امروز</span>
+                        <span class="text-[#01B8AA] font-semibold">ISO/IEC 17025</span>
+                    </div>
+                </div>
+
+                <!-- Card 2: Calibration Compliance Gauge -->
+                <div class="pbi-card p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                        <div class="pbi-header">شاخص سلامت کالیبراسیون</div>
+                        <div class="pbi-sub mt-0.5">دستگاه‌های دارای گواهی معتبر</div>
+                    </div>
+                    <div class="relative h-32 flex items-center justify-center my-1">
+                        <canvas id="gaugeChart"></canvas>
+                        <div class="absolute bottom-2 text-center">
+                            <div id="kpiValidCount" class="text-2xl font-extrabold text-[#252423]">0</div>
+                            <div class="text-[11px] text-gray-500">دستگاه معتبر</div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-[11px] text-gray-400 px-2">
+                        <span>۰٪</span>
+                        <span id="gaugePercentText" class="font-bold text-[#01B8AA]">۰٪</span>
+                        <span>۱۰۰٪</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Column (5 cols): Stacked Bar Chart by Department/Category -->
+            <div class="lg:col-span-5 pbi-card p-4 flex flex-col justify-between">
+                <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+                    <div>
+                        <div class="pbi-header">وضعیت کالیبراسیون بر اساس واحد / بخش</div>
+                        <div class="pbi-sub mt-0.5">تفکیک دستگاه‌های معتبر، در آستانه انقضا و منقضی</div>
+                    </div>
+                    <!-- Custom Legend matching Power BI -->
+                    <div class="flex items-center gap-3 text-xs">
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-[#01B8AA]"></span>معتبر</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-[#F2C80F]"></span>نزدیک انقضا</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-[#374649]"></span>منقضی</span>
+                    </div>
+                </div>
+                <div class="relative flex-1 min-h-[250px] w-full">
+                    <canvas id="stackedBarChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Right Column (4 cols): Pie Chart by Calibrating Company -->
+            <div class="lg:col-span-4 pbi-card p-4 flex flex-col justify-between">
+                <div>
+                    <div class="pbi-header">سهم شرکت‌های کالیبره کننده</div>
+                    <div class="pbi-sub mt-0.5">توزیع گواهی‌های صادر شده توسط آزمایشگاه‌های همکار</div>
+                </div>
+                <div class="relative flex-1 min-h-[250px] w-full flex items-center justify-center">
+                    <canvas id="companyPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 2: 5 KPI Cards (Matching the 5 middle cards in Power BI layout) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <!-- KPI 1 -->
+            <div class="pbi-card p-4 flex flex-col justify-between">
+                <div>
+                    <div class="pbi-header text-xs sm:text-sm">نرخ انطباق کل</div>
+                    <div class="pbi-sub text-[10px]">مقایسه با دوره قبل</div>
+                </div>
+                <div class="my-3 flex items-center justify-center gap-2">
+                    <span id="kpiComplianceRate" class="text-2xl sm:text-3xl font-extrabold text-[#252423]">0%</span>
+                    <i data-lucide="arrow-up" class="w-6 h-6 text-[#01B8AA] stroke-[2.5]"></i>
+                </div>
+            </div>
+
+            <!-- KPI 2 -->
+            <div class="pbi-card p-4 flex flex-col justify-between">
+                <div>
+                    <div class="pbi-header text-xs sm:text-sm">کالیبره شده این ماه</div>
+                    <div class="pbi-sub text-[10px]">گواهی‌های ثبت شده اخیر</div>
+                </div>
+                <div class="my-3 flex items-center justify-center gap-2">
+                    <span id="kpiRecentCalibrated" class="text-2xl sm:text-3xl font-extrabold text-[#252423]">0</span>
+                    <i data-lucide="arrow-up" class="w-6 h-6 text-[#01B8AA] stroke-[2.5]"></i>
+                </div>
+            </div>
+
+            <!-- KPI 3 (Center Highlight Card with Icon) -->
+            <div class="pbi-card p-4 flex flex-col items-center justify-center text-center col-span-2 sm:col-span-1 border-b-4 border-b-[#01B8AA]">
+                <div id="kpiCompaniesCount" class="text-2xl sm:text-3xl font-extrabold text-[#252423]">0</div>
+                <div class="text-xs font-semibold text-gray-600 mt-0.5">شرکت کالیبراتور فعال</div>
+                <div class="flex items-center gap-1.5 mt-2 text-[#01B8AA]">
+                    <i data-lucide="building-2" class="w-5 h-5 text-[#374649]"></i>
+                    <i data-lucide="shield-check" class="w-6 h-6 text-[#01B8AA]"></i>
+                    <i data-lucide="award" class="w-5 h-5 text-[#F2C80F]"></i>
+                </div>
+            </div>
+
+            <!-- KPI 4 -->
+            <div class="pbi-card p-4 flex flex-col justify-between">
+                <div>
+                    <div class="pbi-header text-xs sm:text-sm">در آستانه انقضا</div>
+                    <div class="pbi-sub text-[10px]">کمتر از ۳۰ روز باقی‌مانده</div>
+                </div>
+                <div class="my-3 flex items-center justify-center gap-2">
+                    <span id="kpiExpiringSoon" class="text-2xl sm:text-3xl font-extrabold text-[#d97706]">0</span>
+                    <i data-lucide="alert-triangle" class="w-6 h-6 text-[#F2C80F] stroke-[2.5]"></i>
+                </div>
+            </div>
+
+            <!-- KPI 5 -->
+            <div class="pbi-card p-4 flex flex-col justify-between">
+                <div>
+                    <div class="pbi-header text-xs sm:text-sm">منقضی شده</div>
+                    <div class="pbi-sub text-[10px]">نیازمند ارسال فوری</div>
+                </div>
+                <div class="my-3 flex items-center justify-center gap-2">
+                    <span id="kpiExpiredCount" class="text-2xl sm:text-3xl font-extrabold text-[#FD625E]">0</span>
+                    <i data-lucide="arrow-down" class="w-6 h-6 text-[#FD625E] stroke-[2.5]"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 3: Bottom Trend Mini-Charts + Comprehensive Device Registry Table -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <!-- Left Mini Charts & Definitions (4 cols) -->
+            <div class="lg:col-span-4 flex flex-col gap-4">
+                <!-- Monthly Trend Chart -->
+                <div class="pbi-card p-4">
+                    <div class="pbi-header">روند ماهانه انجام کالیبراسیون</div>
+                    <div class="pbi-sub mt-0.5 mb-2">تعداد دستگاه‌های کالیبره شده در ۶ ماه اخیر</div>
+                    <div class="h-36">
+                        <canvas id="trendBarChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Definitions & Standards Card (Matching Power BI Definitions Box) -->
+                <div class="pbi-card p-4 flex-1">
+                    <div class="pbi-header mb-2 flex items-center gap-1.5">
+                        <i data-lucide="info" class="w-4 h-4 text-[#01B8AA]"></i>
+                        <span>راهنمای وضعیت‌ها و استانداردها</span>
+                    </div>
+                    <ul class="space-y-2 text-xs text-gray-600 leading-relaxed">
+                        <li><strong class="text-[#01B8AA]">معتبر:</strong> بیش از ۳۰ روز تا سررسید کالیبراسیون بعدی باقی است و دستگاه مجاز به بهره‌برداری است.</li>
+                        <li><strong class="text-[#d97706]">نزدیک به انقضا:</strong> کمتر از ۳۰ روز تا تاریخ انقضا باقی مانده؛ هماهنگی با شرکت کالیبراتور الزامی است.</li>
+                        <li><strong class="text-[#FD625E]">منقضی شده:</strong> تاریخ اعتبار به پایان رسیده و دستگاه باید فوراً از خط خارج و برچسب‌گذاری شود.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Right Table: Detailed Device Calibration Records (8 cols) -->
+            <div class="lg:col-span-8 pbi-card p-4 flex flex-col">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3 pb-2 border-b">
+                    <div>
+                        <div class="pbi-header">جدول جامع سوابق کالیبراسیون دستگاه‌ها</div>
+                        <div class="pbi-sub mt-0.5">مشاهده مشخصات دستگاه، تاریخ کالیبراسیون، سررسید بعدی و شرکت کالیبره کننده</div>
+                    </div>
+                    
+                    <!-- Search Input -->
+                    <div class="relative w-full sm:w-64">
+                        <input type="text" id="searchInput" onkeyup="applyFilters()" placeholder="جستجوی نام دستگاه، کد یا شرکت..." 
+                            class="w-full text-xs border border-gray-300 rounded pl-3 pr-8 py-2 focus:outline-none focus:border-[#01B8AA]">
+                        <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute right-2.5 top-2"></i>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto flex-1">
+                    <table class="w-full text-right border-collapse text-xs sm:text-sm">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 border-b border-gray-200">
+                                <th class="py-2.5 px-3 font-bold">کد تجهیز</th>
+                                <th class="py-2.5 px-3 font-bold">نام دستگاه</th>
+                                <th class="py-2.5 px-3 font-bold">واحد / بخش</th>
+                                <th class="py-2.5 px-3 font-bold">شرکت کالیبره کننده</th>
+                                <th class="py-2.5 px-3 font-bold">تاریخ کالیبراسیون</th>
+                                <th class="py-2.5 px-3 font-bold">کالیبراسیون بعدی</th>
+                                <th class="py-2.5 px-3 font-bold">شماره گواهی</th>
+                                <th class="py-2.5 px-3 font-bold text-center">وضعیت</th>
+                                <th class="py-2.5 px-3 font-bold text-center">عملیات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devicesTableBody" class="divide-y divide-gray-100">
+                            <!-- Rows will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modal for Adding / Editing Calibration Record -->
+    <div id="calibrationModal" class="fixed inset-0 bg-black/50 backdrop-blur-xs hidden items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full overflow-hidden animate-fade-in">
+            <div class="bg-[#252423] text-white px-5 py-3.5 flex items-center justify-between">
+                <h3 id="modalTitle" class="font-bold text-base flex items-center gap-2">
+                    <i data-lucide="clipboard-check" class="w-5 h-5 text-[#01B8AA]"></i>
+                    <span>ثبت اطلاعات کالیبراسیون دستگاه</span>
+                </h3>
+                <button onclick="closeModal()" class="text-gray-300 hover:text-white cursor-pointer">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="calibrationForm" onsubmit="saveRecord(event)" class="p-5 space-y-4 text-sm">
+                <input type="hidden" id="recordId">
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">کد شناسایی دستگاه *</label>
+                        <input type="text" id="deviceCode" required placeholder="مثال: EQ-1042"
+                            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-[#01B8AA]">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">نام دستگاه *</label>
+                        <input type="text" id="deviceName" required placeholder="مثال: ترازوی دقیق آزمایشگاهی"
+                            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-[#01B8AA]">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">واحد / بخش *</label>
+                        <select id="department" required class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-[#01B8AA]">
+                            <option value="آزمایشگاه کنترل کیفیت">آزمایشگاه کنترل کیفیت</option>
+                            <option value="خط تولید و مونتاژ">خط تولید و مونتاژ</option>
+                            <option value="تاسیسات و ابزار دقیق">تاسیسات و ابزار دقیق</option>
+                            <option value="تحقیق و توسعه (R&D)">تحقیق و توسعه (R&D)</option>
+                            <option value="انبار و لجستیک">انبار و لجستیک</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">شرکت کالیبره کننده *</label>
+                        <input type="text" id="calibratorCompany" list="companiesList" required placeholder="نام شرکت کالیبراتور"
+                            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-[#01B8AA]">
+                        <datalist id="companiesList">
+                            <option value="آزمایشگاه مرجع سنجش دقیق">
+                            <option value="شرکت کالیبراسیون پرتو آزما">
+                            <option value="موسسه استاندارد و تحقیقات صنعتی">
+                            <option value="مهندسی ابزار دقیق پارس">
+                            <option value="آزمایشگاه همکار تراز سنجش">
+                        </datalist>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">تاریخ انجام کالیبراسیون *</label>
+                        <input type="date" id="calibrationDate" required
+                            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-[#01B8AA]">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">تاریخ اعتبار (کالیبراسیون بعدی) *</label>
+                        <input type="date" id="nextCalibrationDate" required
+                            class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-[#01B8AA]">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-700 mb-1">شماره گواهینامه کالیبراسیون *</label>
+                    <input type="text" id="certificateNumber" required placeholder="مثال: CERT-1405-8821"
+                        class="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-[#01B8AA]">
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-3 border-t">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded cursor-pointer">
+                        انصراف
+                    </button>
+                    <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-[#01B8AA] hover:bg-[#019e92] rounded shadow cursor-pointer">
+                        ذخیره اطلاعات
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Toast Notification -->
+    <div id="toast" class="fixed bottom-5 left-5 bg-[#252423] text-white text-xs px-4 py-3 rounded shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2">
+        <i data-lucide="check-circle" class="w-4 h-4 text-[#01B8AA]"></i>
+        <span id="toastMessage">عملیات با موفقیت انجام شد.</span>
+    </div>
+
+    <script>
+        // Set Chart.js global font to Vazirmatn
+        Chart.defaults.font.family = "'Vazirmatn', sans-serif";
+        Chart.defaults.color = '#605E5C';
+
+        // Helper: Get dynamic dates relative to today so statuses (valid, expiring, expired) are always realistic
+        function getRelativeDate(daysOffset) {
+            const d = new Date();
+            d.setDate(d.getDate() + daysOffset);
+            return d.toISOString().split('T')[0];
+        }
+
+        // Convert YYYY-MM-DD to Persian (Jalali) formatted string for display
+        function toPersianDate(isoDateStr) {
+            if (!isoDateStr) return '-';
+            try {
+                const date = new Date(isoDateStr);
+                return new Intl.DateTimeFormat('fa-IR', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }).format(date);
+            } catch (e) {
+                return isoDateStr;
+            }
+        }
+
+        // Initial Realistic Sample Data
+        let devicesData = [
+            {
+                id: 1,
+                code: 'QC-BAL-01',
+                name: 'ترازوی آنالیتیکال ۰.۰۰۰۱ گرم',
+                department: 'آزمایشگاه کنترل کیفیت',
+                company: 'آزمایشگاه مرجع سنجش دقیق',
+                calDate: getRelativeDate(-180),
+                nextDate: getRelativeDate(185),
+                certNo: 'CAL-405-1029'
+            },
+            {
+                id: 2,
+                code: 'PR-PRS-14',
+                name: 'گیج فشار دیجیتال هیدرولیک',
+                department: 'خط تولید و مونتاژ',
+                company: 'شرکت کالیبراسیون پرتو آزما',
+                calDate: getRelativeDate(-350),
+                nextDate: getRelativeDate(15), // Expiring soon
+                certNo: 'PRT-9921-A'
+            },
+            {
+                id: 3,
+                code: 'INS-TMP-08',
+                name: 'ترمومتر لیزری مادون قرمز',
+                department: 'تاسیسات و ابزار دقیق',
+                company: 'مهندسی ابزار دقیق پارس',
+                calDate: getRelativeDate(-380),
+                nextDate: getRelativeDate(-15), // Expired
+                certNo: 'PRS-8810-C'
+            },
+            {
+                id: 4,
+                code: 'RD-OSC-03',
+                name: 'اسیلوسکوپ دیجیتال ۴ کاناله',
+                department: 'تحقیق و توسعه (R&D)',
+                company: 'موسسه استاندارد و تحقیقات صنعتی',
+                calDate: getRelativeDate(-90),
+                nextDate: getRelativeDate(275),
+                certNo: 'STD-1405-441'
+            },
+            {
+                id: 5,
+                code: 'QC-PHM-05',
+                name: 'PH متر رومیزی آزمایشگاهی',
+                department: 'آزمایشگاه کنترل کیفیت',
+                company: 'آزمایشگاه مرجع سنجش دقیق',
+                calDate: getRelativeDate(-345),
+                nextDate: getRelativeDate(20), // Expiring soon
+                certNo: 'CAL-404-9812'
+            },
+            {
+                id: 6,
+                code: 'PR-TRQ-11',
+                name: 'ترکمتر دیجیتال کالیبراسیون',
+                department: 'خط تولید و مونتاژ',
+                company: 'شرکت کالیبراسیون پرتو آزما',
+                calDate: getRelativeDate(-120),
+                nextDate: getRelativeDate(245),
+                certNo: 'PRT-1045-B'
+            },
+            {
+                id: 7,
+                code: 'WH-SCL-02',
+                name: 'باسکول دیجیتال ۲ تنی انبار',
+                department: 'انبار و لجستیک',
+                company: 'آزمایشگاه همکار تراز سنجش',
+                calDate: getRelativeDate(-60),
+                nextDate: getRelativeDate(305),
+                certNo: 'TRZ-5501'
+            },
+            {
+                id: 8,
+                code: 'INS-FLW-09',
+                name: 'فلومتر التراسونیک خطوط بخار',
+                department: 'تاسیسات و ابزار دقیق',
+                company: 'مهندسی ابزار دقیق پارس',
+                calDate: getRelativeDate(-400),
+                nextDate: getRelativeDate(-35), // Expired
+                certNo: 'PRS-7720-F'
+            },
+            {
+                id: 9,
+                code: 'QC-MIC-12',
+                name: 'میکرومتر دیجیتال میتوتویو',
+                department: 'آزمایشگاه کنترل کیفیت',
+                company: 'آزمایشگاه مرجع سنجش دقیق',
+                calDate: getRelativeDate(-25),
+                nextDate: getRelativeDate(340),
+                certNo: 'CAL-405-2210'
+            },
+            {
+                id: 10,
+                code: 'PR-VLT-04',
+                name: 'مولتی‌متر کلمپی صنعتی فلوک',
+                department: 'خط تولید و مونتاژ',
+                company: 'شرکت کالیبراسیون پرتو آزما',
+                calDate: getRelativeDate(-15),
+                nextDate: getRelativeDate(350),
+                certNo: 'PRT-1190-E'
+            }
+        ];
+
+        // Chart Instances
+        let gaugeChartInstance = null;
+        let stackedBarChartInstance = null;
+        let companyPieChartInstance = null;
+        let trendBarChartInstance = null;
+
+        // Calculate Calibration Status based on Next Calibration Date
+        function getStatusInfo(nextDateStr) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const nextDate = new Date(nextDateStr);
+            nextDate.setHours(0, 0, 0, 0);
+            
+            const diffTime = nextDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) {
+                return {
+                    key: 'expired',
+                    label: `منقضی (${Math.abs(diffDays)} روز پیش)`,
+                    badgeClass: 'bg-red-100 text-[#FD625E] border border-red-200'
+                };
+            } else if (diffDays <= 30) {
+                return {
+                    key: 'expiring',
+                    label: `نزدیک انقضا (${diffDays} روز)`,
+                    badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200'
+                };
+            } else {
+                return {
+                    key: 'valid',
+                    label: `معتبر (${diffDays} روز)`,
+                    badgeClass: 'bg-teal-50 text-[#019e92] border border-teal-200'
+                };
+            }
+        }
+
+        // Render Table & Apply Search/Status Filters
+        function applyFilters() {
+            const searchQuery = document.getElementById('searchInput').value.trim().toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const tbody = document.getElementById('devicesTableBody');
+            tbody.innerHTML = '';
+
+            const filtered = devicesData.filter(item => {
+                const status = getStatusInfo(item.nextDate).key;
+                const matchesStatus = statusFilter === 'all' || status === statusFilter;
+                const matchesSearch = 
+                    item.code.toLowerCase().includes(searchQuery) ||
+                    item.name.toLowerCase().includes(searchQuery) ||
+                    item.company.toLowerCase().includes(searchQuery) ||
+                    item.department.toLowerCase().includes(searchQuery) ||
+                    item.certNo.toLowerCase().includes(searchQuery);
+                return matchesStatus && matchesSearch;
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="py-8 text-center text-gray-400">
+                            هیچ دستگاهی با فیلترهای انتخاب شده یافت نشد.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const statusObj = getStatusInfo(item.nextDate);
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition';
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 font-mono font-semibold text-gray-800">${item.code}</td>
+                    <td class="py-2.5 px-3 font-medium text-gray-900">${item.name}</td>
+                    <td class="py-2.5 px-3 text-gray-600 text-xs">${item.department}</td>
+                    <td class="py-2.5 px-3 text-gray-800 font-medium">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-[#01B8AA]"></span>
+                            <span>${item.company}</span>
+                        </div>
+                    </td>
+                    <td class="py-2.5 px-3 text-gray-600">${toPersianDate(item.calDate)}</td>
+                    <td class="py-2.5 px-3 font-semibold text-gray-800">${toPersianDate(item.nextDate)}</td>
+                    <td class="py-2.5 px-3 font-mono text-xs text-gray-500">${item.certNo}</td>
+                    <td class="py-2.5 px-3 text-center">
+                        <span class="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold ${statusObj.badgeClass}">
+                            ${statusObj.label}
+                        </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="editRecord(${item.id})" title="ویرایش" class="p-1.5 text-gray-500 hover:text-[#01B8AA] hover:bg-teal-50 rounded transition cursor-pointer">
+                                <i data-lucide="edit-3" class="w-4 h-4"></i>
+                            </button>
+                            <button onclick="deleteRecord(${item.id})" title="حذف" class="p-1.5 text-gray-500 hover:text-[#FD625E] hover:bg-red-50 rounded transition cursor-pointer">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            lucide.createIcons();
+        }
+
+        // Update All KPIs and Charts
+        function updateDashboard() {
+            const total = devicesData.length;
+            let validCount = 0;
+            let expiringCount = 0;
+            let expiredCount = 0;
+            let recentCount = 0;
+
+            const today = new Date();
+            const companiesSet = new Set();
+
+            devicesData.forEach(d => {
+                const st = getStatusInfo(d.nextDate).key;
+                if (st === 'valid') validCount++;
+                else if (st === 'expiring') expiringCount++;
+                else if (st === 'expired') expiredCount++;
+
+                companiesSet.add(d.company);
+
+                // Check if calibrated in the last 30 days
+                const calDateObj = new Date(d.calDate);
+                const daysSinceCal = (today - calDateObj) / (1000 * 60 * 60 * 24);
+                if (daysSinceCal >= 0 && daysSinceCal <= 30) {
+                    recentCount++;
+                }
+            });
+
+            const validAndExpiring = validCount + expiringCount;
+            const complianceRate = total > 0 ? Math.round((validAndExpiring / total) * 100) : 0;
+
+            // Update DOM KPIs
+            document.getElementById('kpiTotalDevices').innerText = total.toLocaleString('fa-IR');
+            document.getElementById('kpiValidCount').innerText = validCount.toLocaleString('fa-IR');
+            document.getElementById('gaugePercentText').innerText = complianceRate.toLocaleString('fa-IR') + '٪';
+            document.getElementById('kpiComplianceRate').innerText = complianceRate.toLocaleString('fa-IR') + '%';
+            document.getElementById('kpiRecentCalibrated').innerText = recentCount.toLocaleString('fa-IR');
+            document.getElementById('kpiCompaniesCount').innerText = companiesSet.size.toLocaleString('fa-IR');
+            document.getElementById('kpiExpiringSoon').innerText = expiringCount.toLocaleString('fa-IR');
+            document.getElementById('kpiExpiredCount').innerText = expiredCount.toLocaleString('fa-IR');
+
+            renderCharts(validCount, expiringCount, expiredCount);
+            applyFilters();
+        }
+
+        // Render Power BI Style Charts
+        function renderCharts(validCount, expiringCount, expiredCount) {
+            // 1. Gauge Chart (Semi-Doughnut)
+            const gaugeCtx = document.getElementById('gaugeChart').getContext('2d');
+            if (gaugeChartInstance) gaugeChartInstance.destroy();
+            gaugeChartInstance = new Chart(gaugeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['معتبر', 'سایر'],
+                    datasets: [{
+                        data: [validCount, Math.max(0, devicesData.length - validCount)],
+                        backgroundColor: ['#01B8AA', '#E5E7EB'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    rotation: -90,
+                    circumference: 180,
+                    cutout: '72%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    }
+                }
+            });
+
+            // 2. Stacked Bar Chart by Department
+            const departments = [...new Set(devicesData.map(d => d.department))];
+            const validByDept = departments.map(dept => devicesData.filter(d => d.department === dept && getStatusInfo(d.nextDate).key === 'valid').length);
+            const expiringByDept = departments.map(dept => devicesData.filter(d => d.department === dept && getStatusInfo(d.nextDate).key === 'expiring').length);
+            const expiredByDept = departments.map(dept => devicesData.filter(d => d.department === dept && getStatusInfo(d.nextDate).key === 'expired').length);
+
+            const stackedCtx = document.getElementById('stackedBarChart').getContext('2d');
+            if (stackedBarChartInstance) stackedBarChartInstance.destroy();
+            stackedBarChartInstance = new Chart(stackedCtx, {
+                type: 'bar',
+                data: {
+                    labels: departments.map(d => d.split(' ').slice(0, 2).join(' ')),
+                    datasets: [
+                        {
+                            label: 'معتبر',
+                            data: validByDept,
+                            backgroundColor: '#01B8AA',
+                            borderRadius: 2
+                        },
+                        {
+                            label: 'نزدیک انقضا',
+                            data: expiringByDept,
+                            backgroundColor: '#F2C80F',
+                            borderRadius: 2
+                        },
+                        {
+                            label: 'منقضی شده',
+                            data: expiredByDept,
+                            backgroundColor: '#374649',
+                            borderRadius: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            // 3. Pie Chart by Calibrating Company
+            const companyCounts = {};
+            devicesData.forEach(d => {
+                companyCounts[d.company] = (companyCounts[d.company] || 0) + 1;
+            });
+            const companyLabels = Object.keys(companyCounts);
+            const companyValues = Object.values(companyCounts);
+            const pbiColors = ['#01B8AA', '#374649', '#FD625E', '#F2C80F', '#5F6B6D', '#8AD4EB'];
+
+            const pieCtx = document.getElementById('companyPieChart').getContext('2d');
+            if (companyPieChartInstance) companyPieChartInstance.destroy();
+            companyPieChartInstance = new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: companyLabels,
+                    datasets: [{
+                        data: companyValues,
+                        backgroundColor: pbiColors.slice(0, companyLabels.length),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 10,
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 4. Mini Monthly Trend Bar Chart
+            const trendCtx = document.getElementById('trendBarChart').getContext('2d');
+            if (trendBarChartInstance) trendBarChartInstance.destroy();
+            trendBarChartInstance = new Chart(trendCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان'],
+                    datasets: [{
+                        label: 'تعداد کالیبراسیون',
+                        data: [4, 7, 5, 9, 6, devicesData.length],
+                        backgroundColor: '#01B8AA',
+                        borderRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { stepSize: 3 } }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+
+        // Modal Handlers
+        function openModal(isEdit = false) {
+            const modal = document.getElementById('calibrationModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            if (!isEdit) {
+                document.getElementById('calibrationForm').reset();
+                document.getElementById('recordId').value = '';
+                document.getElementById('modalTitle').querySelector('span').innerText = 'ثبت اطلاعات کالیبراسیون دستگاه';
+                // Default dates: today & next year
+                document.getElementById('calibrationDate').value = getRelativeDate(0);
+                document.getElementById('nextCalibrationDate').value = getRelativeDate(365);
+            }
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('calibrationModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function saveRecord(e) {
+            e.preventDefault();
+            const idVal = document.getElementById('recordId').value;
+            const newRecord = {
+                id: idVal ? parseInt(idVal) : Date.now(),
+                code: document.getElementById('deviceCode').value.trim(),
+                name: document.getElementById('deviceName').value.trim(),
+                department: document.getElementById('department').value,
+                company: document.getElementById('calibratorCompany').value.trim(),
+                calDate: document.getElementById('calibrationDate').value,
+                nextDate: document.getElementById('nextCalibrationDate').value,
+                certNo: document.getElementById('certificateNumber').value.trim()
+            };
+
+            if (idVal) {
+                const index = devicesData.findIndex(d => d.id === parseInt(idVal));
+                if (index !== -1) devicesData[index] = newRecord;
+                showToast('اطلاعات کالیبراسیون دستگاه به‌روزرسانی شد.');
+            } else {
+                devicesData.unshift(newRecord);
+                showToast('دستگاه جدید با موفقیت ثبت شد.');
+            }
+
+            closeModal();
+            updateDashboard();
+        }
+
+        function editRecord(id) {
+            const item = devicesData.find(d => d.id === id);
+            if (!item) return;
+
+            document.getElementById('recordId').value = item.id;
+            document.getElementById('deviceCode').value = item.code;
+            document.getElementById('deviceName').value = item.name;
+            document.getElementById('department').value = item.department;
+            document.getElementById('calibratorCompany').value = item.company;
+            document.getElementById('calibrationDate').value = item.calDate;
+            document.getElementById('nextCalibrationDate').value = item.nextDate;
+            document.getElementById('certificateNumber').value = item.certNo;
+
+            document.getElementById('modalTitle').querySelector('span').innerText = 'ویرایش رکورد کالیبراسیون';
+            openModal(true);
+        }
+
+        function deleteRecord(id) {
+            devicesData = devicesData.filter(d => d.id !== id);
+            updateDashboard();
+            showToast('رکورد مورد نظر از لیست حذف شد.');
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // Initialize Dashboard on Window Load
+        window.onload = function() {
+            lucide.createIcons();
+            updateDashboard();
+        };
+    </script>
+</body>
+</html>
